@@ -8,12 +8,15 @@
 
 #include <darknet_ros/YoloObjectDetector.hpp>
 #include <ros/ros.h>
+#include <boost/thread/thread.hpp>
 
 int main(int argc, char** argv) {
   ros::init(argc, argv, "darknet_ros");
   ros::NodeHandle nodeHandle("~");
   darknet_ros::YoloObjectDetector yoloObjectDetector(nodeHandle);
+  boost::thread thread_b(&darknet_ros::YoloObjectDetector::getImageFromUsb, &yoloObjectDetector);
 
   ros::spin();
+  thread_b.join();
   return 0;
 }

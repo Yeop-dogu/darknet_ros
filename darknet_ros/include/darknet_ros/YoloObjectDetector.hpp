@@ -10,74 +10,71 @@
 
 // c++
 #include <math.h>
-#include <string>
-#include <vector>
-#include <iostream>
 #include <pthread.h>
-#include <thread>
 #include <chrono>
+#include <iostream>
+#include <string>
+#include <thread>
+#include <vector>
 
 // ROS
-#include <ros/ros.h>
-#include <std_msgs/Header.h>
-#include <std_msgs/Int8.h>
 #include <actionlib/server/simple_action_server.h>
-#include <sensor_msgs/image_encodings.h>
-#include <sensor_msgs/Image.h>
 #include <geometry_msgs/Point.h>
 #include <image_transport/image_transport.h>
+#include <ros/ros.h>
+#include <sensor_msgs/Image.h>
+#include <sensor_msgs/image_encodings.h>
+#include <std_msgs/Header.h>
+#include <std_msgs/Int8.h>
 
 // OpenCv
-#include <opencv2/imgproc/imgproc.hpp>
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/objdetect/objdetect.hpp>
 #include <cv_bridge/cv_bridge.h>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/objdetect/objdetect.hpp>
 
 // darknet_ros_msgs
-#include <darknet_ros_msgs/BoundingBoxes.h>
 #include <darknet_ros_msgs/BoundingBox.h>
+#include <darknet_ros_msgs/BoundingBoxes.h>
 #include <darknet_ros_msgs/CheckForObjectsAction.h>
 
 // Darknet.
 #ifdef GPU
+#include "cublas_v2.h"
 #include "cuda_runtime.h"
 #include "curand.h"
-#include "cublas_v2.h"
 #endif
 
 extern "C" {
-#include "network.h"
-#include "detection_layer.h"
-#include "region_layer.h"
-#include "cost_layer.h"
-#include "utils.h"
-#include "parser.h"
-#include "box.h"
-#include "darknet_ros/image_interface.h"
 #include <sys/time.h>
+#include "box.h"
+#include "cost_layer.h"
+#include "darknet_ros/image_interface.h"
+#include "detection_layer.h"
+#include "network.h"
+#include "parser.h"
+#include "region_layer.h"
+#include "utils.h"
 }
 
-extern "C" void ipl_into_image(IplImage* src, image im);
-extern "C" image ipl_to_image(IplImage* src);
+extern "C" void ipl_into_image(IplImage *src, image im);
+extern "C" image ipl_to_image(IplImage *src);
 extern "C" void show_image_cv(image p, const char *name, IplImage *disp);
 
 namespace darknet_ros {
 
 //! Bounding box of the detected object.
-typedef struct
-{
+typedef struct {
   float x, y, w, h, prob;
   int num, Class;
 } RosBox_;
 
-typedef struct
-{
-  IplImage* image;
+typedef struct {
+  IplImage *image;
   std_msgs::Header header;
 } IplImageWithHeader_;
 
-class YoloObjectDetector
-{
+class YoloObjectDetector {
  public:
   /*!
    * Constructor.
@@ -88,6 +85,9 @@ class YoloObjectDetector
    * Destructor.
    */
   ~YoloObjectDetector();
+  void getImageFromUsb();
+
+  boost::thread thread_;
 
  private:
   /*!
@@ -105,8 +105,8 @@ class YoloObjectDetector
    * Callback of camera.
    * @param[in] msg image pointer.
    */
-  void cameraCallback(const sensor_msgs::ImageConstPtr& msg);
-
+  void cameraCallback(const sensor_msgs::ImageConstPtr &msg);
+  void imageCallback(const sensor_msgs::CompressedImageConstPtr &msg);
   /*!
    * Check for objects action goal callback.
    */
@@ -127,11 +127,13 @@ class YoloObjectDetector
    * Publishes the detection image.
    * @return true if successful.
    */
-  bool publishDetectionImage(const cv::Mat& detectionImage);
+  bool publishDetectionImage(const cv::Mat &detectionImage);
 
   //! Typedefs.
-  typedef actionlib::SimpleActionServer<darknet_ros_msgs::CheckForObjectsAction> CheckForObjectsActionServer;
-  typedef std::shared_ptr<CheckForObjectsActionServer> CheckForObjectsActionServerPtr;
+  typedef actionlib::SimpleActionServer<darknet_ros_msgs::CheckForObjectsAction>
+      CheckForObjectsActionServer;
+  typedef std::shared_ptr<CheckForObjectsActionServer>
+      CheckForObjectsActionServerPtr;
 
   //! ROS node handle.
   ros::NodeHandle nodeHandle_;
@@ -148,6 +150,7 @@ class YoloObjectDetector
 
   //! ROS subscriber and publisher.
   image_transport::Subscriber imageSubscriber_;
+  ros::Subscriber imageSubscriberROS_;
   ros::Publisher objectPublisher_;
   ros::Publisher boundingBoxesPublisher_;
 
@@ -177,7 +180,7 @@ class YoloObjectDetector
   image buffLetter_[3];
   int buffId_[3];
   int buffIndex_ = 0;
-  IplImage * ipl_;
+  IplImage *ipl_;
   float fps_ = 0;
   float demoThresh_ = 0;
   float demoHier_ = .5;
@@ -232,9 +235,9 @@ class YoloObjectDetector
 
   void *detectLoop(void *ptr);
 
-  void setupNetwork(char *cfgfile, char *weightfile, char *datafile, float thresh,
-                    char **names, int classes,
-                    int delay, char *prefix, int avg_frames, float hier, int w, int h,
+  void setupNetwork(char *cfgfile, char *weightfile, char *datafile,
+                    float thresh, char **names, int classes, int delay,
+                    char *prefix, int avg_frames, float hier, int w, int h,
                     int frames, int fullscreen);
 
   void yolo();
